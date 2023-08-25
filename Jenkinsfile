@@ -42,13 +42,13 @@ pipeline {
         stage ('Test'){
             steps{
                 //unit test
-                sh 'mvn test'
+                sh 'mvn -s settings.xml test'
             }
         }
         stage('Checkstyle Analysis'){
             steps{
                 //code analysis
-                sh 'mvn checkstyle:checkstyle'
+                sh 'mvn -s settings.xml checkstyle:checkstyle'
             }
         }
     }
