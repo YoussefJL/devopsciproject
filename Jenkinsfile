@@ -81,5 +81,29 @@ pipeline {
             }
             }
         }
+        stage("UploadArtifact"){
+            steps{
+                nexusArtifactUploader(
+                    //informations about NEXUS :
+
+                    nexusVersion: 'nexus3',//the nexus version used
+                    protocol: 'http',
+                    nexusUrl: "${NEXUSIP}:${NEXUSPORT}",//nexus url
+                    groupId: 'QA',//will create a folder with 'com.example' name and put our artifact inside that
+                    version: "${env.BUILD_ID}-${env.BUILD_TIMESTAMP}", // versionning ( build_id will change and build_stamp will change also => good combination for versionning)
+                    repository: "${RELEASE_REPO}",//repos where we want to upload
+                    credentialsId: ${NEXUS_LOGIN},//nexus credentials to gain access 
+                    
+                    //informations about Our ARTIFACT :
+                    
+                    artifacts: [
+                        [artifactId: 'vproapp',//this will be the prefix for our artifact => so the artifact name will be : vproapp-BUILD_ID-BUILD_TIMESTAMP.war
+                         classifier: '',
+                         file: 'target/vprofile-v2.war', // the artifact that we want to upload
+                         type: 'war']
+                    ]
+                )
+            }
+        }
     }
 }
