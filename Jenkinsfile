@@ -73,5 +73,13 @@ pipeline {
                 }
             }
         }
+        stage('Quality Gate'){
+            steps{
+                //waiting for Quality gate to respond for 10 min else abortPipeline
+                timeout(time: 10, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+            }
+            }
+        }
     }
 }
