@@ -1,3 +1,7 @@
+def COLOR_MAP = [
+    'SUCCESS': 'good', 
+    'FAILURE': 'danger',
+]
 pipeline {
     agent any
     tools {
@@ -104,6 +108,17 @@ pipeline {
                     ]
                 )
             }
+        }
+    }
+    post {
+        //always block means it will always get executed.
+        always {
+            echo 'Slack Notifications.'
+            // "slackSend" is the plugin that we Installed and we are passing 3 arguments to it
+            // 3 arguments : one is the channel , one is the color and one is the message 
+            slackSend channel: '#jenkinscicd',
+                color: COLOR_MAP[currentBuild.currentResult],
+                message: "*${currentBuild.currentResult}:* Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} \n More info at: ${env.BUILD_URL}"
         }
     }
 }
