@@ -92,7 +92,7 @@ pipeline {
                     groupId: 'QA',//will create a folder with 'com.example' name and put our artifact inside that
                     version: "${env.BUILD_ID}-${env.BUILD_TIMESTAMP}", // versionning ( build_id will change and build_stamp will change also => good combination for versionning)
                     repository: "${RELEASE_REPO}",//repos where we want to upload
-                    credentialsId: ${NEXUS_LOGIN},//nexus credentials to gain access 
+                    credentialsId: "${NEXUS_LOGIN}s",//nexus credentials to gain access 
                     
                     //informations about Our ARTIFACT :
                     
