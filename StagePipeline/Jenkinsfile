@@ -28,7 +28,7 @@ pipeline {
         NEXUS_CREDENTIAL_ID = "nexuslogin"
         SONARSERVER ='sonarserver'
         SONARSCANNER='sonarscanner'
-        registryCredential= 'ecr:us-east-1:awscreds'
+        registryCredential= 'awscreds'
         //this is the image name
         appRegistry = "745802305465.dkr.ecr.us-east-1.amazonaws.com/vprofileappimg"
         //this is the url repo
