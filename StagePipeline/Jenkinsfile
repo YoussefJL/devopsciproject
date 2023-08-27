@@ -1,121 +1,149 @@
+def COLOR_MAP = [
+    'SUCCESS': 'good', 
+    'FAILURE': 'danger',
+]
 pipeline {
-    
-	agent any
-/*	
-	tools {
-        maven "maven3"
+    agent any
+    tools {
+        maven "MAVEN3"
+        jdk "OracleJDK8"
     }
-*/	
+
     environment {
+        //get the private ip not the public ip , they are in the same network they talk with each other with private ip
+        SNAP_REPO='vprofile-snapshot'
+        NEXUS_USER='admin'
+        NEXUS_PASS='admin123'
+        RELEASE_REPO='vprofile-release'
+        CENTRAL_REPO='vpro-maven-central'
+        NEXUSIP='44.202.88.40' 
+        NEXUSPORT='8081'
+        NEXUS_GRP_REPO='vpro-maven-group'
+        NEXUS_LOGIN='nexuslogin'
         NEXUS_VERSION = "nexus3"
         NEXUS_PROTOCOL = "http"
-        NEXUS_URL = "172.31.40.209:8081"
+        NEXUS_URL = "44.202.88.40:8081"
         NEXUS_REPOSITORY = "vprofile-release"
-	NEXUS_REPOGRP_ID    = "vprofile-grp-repo"
+	    NEXUS_REPOGRP_ID    = "vprofile-grp-repo"
         NEXUS_CREDENTIAL_ID = "nexuslogin"
-        ARTVERSION = "${env.BUILD_ID}"
-    }
-	
-    stages{
+        SONARSERVER ='sonarserver'
+        SONARSCANNER='sonarscanner'
+        registryCredential= 'ecr:us-east-1:awscreds'
+        //this is the image name
+        appRegistry = "745802305465.dkr.ecr.us-east-1.amazonaws.com/vprofileappimg"
+        //this is the url repo
+        vprofileRegistry = "https://745802305465.dkr.ecr.us-east-1.amazonaws.com"
         
-        stage('BUILD'){
-            steps {
-                sh 'mvn clean install -DskipTests'
+    }
+
+
+    stages {
+        stage ('Build') {
+            steps{
+                sh 'mvn -s settings.xml -DskipTests install'
             }
+        
             post {
                 success {
-                    echo 'Now Archiving...'
-                    archiveArtifacts artifacts: '**/target/*.war'
+                    echo "Now archiving ."
+                    archiveArtifacts artifacts:'**/*.war'
                 }
             }
         }
-
-	stage('UNIT TEST'){
-            steps {
-                sh 'mvn test'
+        
+        stage ('Test'){
+            steps{
+                //unit test
+                sh 'mvn -s settings.xml test'
             }
         }
-
-	stage('INTEGRATION TEST'){
-            steps {
-                sh 'mvn verify -DskipUnitTests'
+        stage('Checkstyle Analysis'){
+            steps{
+                //code analysis
+                sh 'mvn -s settings.xml checkstyle:checkstyle'
             }
         }
-		
-        stage ('CODE ANALYSIS WITH CHECKSTYLE'){
-            steps {
-                sh 'mvn checkstyle:checkstyle'
+        stage('Sonar Analysis'){
+             environment {
+                scannerHome = tool "${SONARSCANNER}"
+                SONAR_TOKEN = credentials('sonartoken')
             }
-            post {
-                success {
-                    echo 'Generated Analysis Result'
+            steps {
+                withSonarQubeEnv("${SONARSERVER}") {
+                sh '''${scannerHome}/bin/sonar-scanner -Dsonar.login=${SONAR_TOKEN} \
+                -Dsonar.projectKey=vprofile \
+               -Dsonar.projectName=vprofile-repo \
+               -Dsonar.projectVersion=1.0 \
+               -Dsonar.sources=src/ \
+               -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
+               -Dsonar.junit.reportsPath=target/surefire-reports/ \
+               -Dsonar.jacoco.reportsPath=target/jacoco.exec \
+               -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml'''
                 }
             }
         }
-
-        stage('CODE ANALYSIS with SONARQUBE') {
-          
-		  environment {
-             scannerHome = tool 'sonarscanner4'
-          }
-
-          steps {
-            withSonarQubeEnv('sonar-pro') {
-               sh '''${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=vprofile \
-                   -Dsonar.projectName=vprofile-repo \
-                   -Dsonar.projectVersion=1.0 \
-                   -Dsonar.sources=src/ \
-                   -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
-                   -Dsonar.junit.reportsPath=target/surefire-reports/ \
-                   -Dsonar.jacoco.reportsPath=target/jacoco.exec \
-                   -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml'''
+        stage('Quality Gate'){
+            steps{
+                //waiting for Quality gate to respond for 10 min else abortPipeline
+                timeout(time: 10, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
             }
-
-            timeout(time: 10, unit: 'MINUTES') {
-               waitForQualityGate abortPipeline: true
             }
-          }
         }
+        stage("UploadArtifact"){
+            steps{
+                nexusArtifactUploader(
+                    //informations about NEXUS :
 
-        stage("Publish to Nexus Repository Manager") {
-            steps {
-                script {
-                    pom = readMavenPom file: "pom.xml";
-                    filesByGlob = findFiles(glob: "target/*.${pom.packaging}");
-                    echo "${filesByGlob[0].name} ${filesByGlob[0].path} ${filesByGlob[0].directory} ${filesByGlob[0].length} ${filesByGlob[0].lastModified}"
-                    artifactPath = filesByGlob[0].path;
-                    artifactExists = fileExists artifactPath;
-                    if(artifactExists) {
-                        echo "*** File: ${artifactPath}, group: ${pom.groupId}, packaging: ${pom.packaging}, version ${pom.version} ARTVERSION";
-                        nexusArtifactUploader(
-                            nexusVersion: NEXUS_VERSION,
-                            protocol: NEXUS_PROTOCOL,
-                            nexusUrl: NEXUS_URL,
-                            groupId: NEXUS_REPOGRP_ID,
-                            version: ARTVERSION,
-                            repository: NEXUS_REPOSITORY,
-                            credentialsId: NEXUS_CREDENTIAL_ID,
-                            artifacts: [
-                                [artifactId: pom.artifactId,
-                                classifier: '',
-                                file: artifactPath,
-                                type: pom.packaging],
-                                [artifactId: pom.artifactId,
-                                classifier: '',
-                                file: "pom.xml",
-                                type: "pom"]
-                            ]
-                        );
-                    } 
-		    else {
-                        error "*** File: ${artifactPath}, could not be found";
+                    nexusVersion: 'nexus3',//the nexus version used
+                    protocol: 'http',
+                    nexusUrl: "${NEXUSIP}:${NEXUSPORT}",//nexus url
+                    groupId: 'QA',//will create a folder with 'com.example' name and put our artifact inside that
+                    version: "${env.BUILD_ID}-${env.BUILD_TIMESTAMP}", // versionning ( build_id will change and build_stamp will change also => good combination for versionning)
+                    repository: "${RELEASE_REPO}",//repos where we want to upload
+                    credentialsId: "${NEXUS_LOGIN}",//nexus credentials to gain access 
+                    
+                    //informations about Our ARTIFACT :
+                    
+                    artifacts: [
+                        [artifactId: 'vproapp',//this will be the prefix for our artifact => so the artifact name will be : vproapp-BUILD_ID-BUILD_TIMESTAMP.war
+                         classifier: '',
+                         file: 'target/vprofile-v2.war', // the artifact that we want to upload
+                         type: 'war']
+                    ]
+                )
+            }
+        }
+        stage("Build App Image"){
+            steps{
+                script {//building image
+                    //dockerImage is the variable to get the dockerized image
+                    dockerImage = docker.build( appRegistry + ":$BUILD_NUMBER", "./Docker-files/app/multistage/")
+                }
+            }
+        }
+        stage('Upload App Image'){
+            steps{
+                script{
+                    //logging in to registry first
+                    docker.withRegistry( vprofileRegistry, registryCredential){
+                        //pushing the same image here, the firsst is with the tag number, the second is with the tag 'latest'    
+                        dockerImage.push("$BUILD_NUMBER")
+                        dockerImage.push("latest")
                     }
                 }
             }
         }
-
-
     }
-
-
+    post {
+        //always block means it will always get executed.
+        always {
+            echo 'Slack Notifications.'
+            // "slackSend" is the plugin that we Installed and we are passing 3 arguments to it
+            // 3 arguments : one is the channel , one is the color and one is the message 
+            slackSend channel: '#jenkinscicd',
+                color: COLOR_MAP[currentBuild.currentResult],
+                message: "*${currentBuild.currentResult}:* Job ${env.JOB_NAME} build ${env.BUILD_NUMBER} \n More info at: ${env.BUILD_URL}"
+        }
+    }
 }
