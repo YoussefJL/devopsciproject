@@ -33,7 +33,9 @@ pipeline {
         appRegistry = "745802305465.dkr.ecr.us-east-1.amazonaws.com/vprofileappimg"
         //this is the url repo
         vprofileRegistry = "https://745802305465.dkr.ecr.us-east-1.amazonaws.com"
-        
+        cluster = "vprostaging"
+        //the service name which we will use to create the container to deploy the image
+        service ="vproappstagesvc"
     }
 
 
@@ -131,6 +133,14 @@ pipeline {
                         dockerImage.push("$BUILD_NUMBER")
                         dockerImage.push("latest")
                     }
+                }
+            }
+        }
+        stage('Deploy to ECS staging'){
+            steps {
+                withAWS(credentials:'awscreds',region:'us-east-1'){
+                    //we are telling the service to forcefully delete the old container and deploy the new container with the latest image 
+                    sh 'aws ecs update-service --cluster ${cluster} --service ${service} --force-new-deployment'
                 }
             }
         }
