@@ -1,10 +1,12 @@
 - name: Common tool setup on all the servers
   hosts: appsrvgrp
+  #Setting become: yes means that the task will run with escalated privileges. typically as a superuser like "root" 
   become: yes
   vars:
     tom_url: https://archive.apache.org/dist/tomcat/tomcat-8/v8.5.37/bin/apache-tomcat-8.5.37.tar.gz
 
   tasks:
+  #Installing jdk 
     - name: Install JDK on Centos 6/7
       yum:
         name: java-1.8.0-openjdk.x86_64
@@ -18,6 +20,7 @@
         update_cache: yes
       when: ansible_distribution == 'Ubuntu' 
 
+  #Downloading Tomcat tar ball and saving it in /tmp/tomcat-8.tar.gz
     - name: Download Tomcat Tar Ball/Binaries
       get_url:
         url: "{{tom_url}}"
@@ -33,7 +36,10 @@
         name: tomcat
         group: tomcat
         shell: /bin/nologin
+        #home directory for tomcat
         home: /usr/local/tomcat8
+
+# we create this directory /tmp/tomcat8 to extract tomcat tarball
 
     - file:
         path: /tmp/tomcat8
@@ -47,12 +53,14 @@
         list_files: yes
       register: unarchive_info
 
+# we are catching the file name where it got created
+
     - debug:
         msg: "{{unarchive_info.files[0].split('/')[0]}}"
 
     - name: Synchronize /tmp/tomcat8/tomcat_cont /usr/local/tomcat8.
       synchronize:
-        src: "/tmp/tomcat8/{{unarchive_info.files[0].split('/')[0]}}/"
+        src: "/tmp/tomcat8/{{unarchive_info.files[0].split('/')[0]}}/" #this is going to give us the directory name where the Tomcat is extracted !
         dest: /usr/local/tomcat8/
       delegate_to: "{{ inventory_hostname }}"
 
@@ -62,7 +70,7 @@
         owner: tomcat
         group: tomcat
         recurse: yes
-
+  # ------- Now our Tomcat Binaries are read --------
     - name: Setup tomcat SVC file on Centos 7
       template:
          src: templates/epel7-svcfile.j2
@@ -103,7 +111,7 @@
       systemd:
         daemon_reload: yes 
       when: ansible_distribution_major_version > '6' or ansible_distribution_major_version > '15'
-
+  # Now we are able to use the service module to manage our Tomcat service
     - name: Start & Enable TOmcat 8
       service:
         name: tomcat
