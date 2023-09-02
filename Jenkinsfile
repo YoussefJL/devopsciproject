@@ -65,7 +65,6 @@ pipeline {
 
         }
     }
-    }
     post {
         //always block means it will always get executed.
         always {
