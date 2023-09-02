@@ -24,10 +24,11 @@ pipeline {
         NEXUS_PROTOCOL = "http"
         NEXUS_URL = "44.202.88.40:8081"
         NEXUS_REPOSITORY = "vprofile-release"
-	NEXUS_REPOGRP_ID    = "vprofile-grp-repo"
+	    NEXUS_REPOGRP_ID    = "vprofile-grp-repo"
         NEXUS_CREDENTIAL_ID = "nexuslogin"
         SONARSERVER ='sonarserver'
         SONARSCANNER='sonarscanner'
+        NEXUSPASS= credentials('nexuspass')
         
     }
 
@@ -108,6 +109,33 @@ pipeline {
                     ]
                 )
             }
+        }
+        stage('Ansible Deploy to staging'){
+            // stage to execute our ansible playbooks by using Ansible plugin.
+            steps{
+                ansiblePlaybook([
+                    playbook: 'ansible/site.yml',
+                    inventory: 'ansible/stage.inventory',
+                    installation: 'ansible',
+                    colorized: true,
+                    credentialsId: 'applogin',
+                    //disableHostKeyChecking: true otherwise playbook execution will fail. It will say host key checking is enabled so make sure this option is there extra variables. 
+                    disableHostKeyChecking: true,
+                    extraVars   : [
+                        USER: "admin",
+                        PASS: "${NEXUSPASS}"
+                        nexusip: "172.31.89.35",
+                        reponame: "vprofile-release",
+                        groupid: "QA",
+                        time: "${env.BUILD_TIMESTAMP}",
+                        build: "${env.BUILD_ID}",
+                        artifactid: "vproapp",
+                        vprofile_version: "vproapp-${env.BUILD_ID}-${env.BUILD_TIMESTAMP}.war"
+
+                    ]
+                ])
+            }
+
         }
     }
     post {
