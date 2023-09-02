@@ -3,16 +3,23 @@
   hosts: appsrvgrp
   become: yes
   vars:
+  #this timestamp variable is going to be used to create backup file, so before we deploy our new artifact, we r going to take a backup of the existing artifact.
+  #it gets created everytime we run the playbook 
     timestamp: "{{ansible_date_time.date}}_{{ansible_date_time.hour}}_{{ansible_date_time.minute}}"
   tasks:
     - name: Download latest VProfile.war from nexus
       get_url:
+      #those variables we are going to pass from jenkins, from jenkins we will execute this playbook, so while executing 
+      # we r going to pass the values of those variables and this will be through a plugin
         url: "http://{{USER}}:{{PASS}}@{{nexusip}}:8081/repository/{{reponame}}/{{groupid}}/{{artifactid}}/{{build}}-{{time}}/{{vprofile_version}}"
         dest: "/tmp/vproapp-{{vprofile_version}}"
       register: wardeploy
       tags:
        - deploy
 
+# why using stat module ? /usr/local/tomcat8/webapps/ROOT this file can exist and cannot exist also !
+# if it exists i will do the backup
+# else we are not going to any backup
     - stat:
         path: /usr/local/tomcat8/webapps/ROOT
       register: artifact_stat
@@ -27,17 +34,21 @@
        - deploy
 
     - name: Try Backup and Deploy
+    # we r using "block" and "rescure" so if any case the deployment fails we can handle that and not keep our tomcat stopped 
+    ############### the main block is this ####################
       block:
       - name: Archive ROOT dir with timestamp
+        #taking the backup if the file exists 
         archive:
           path: /usr/local/tomcat8/webapps/ROOT
           dest: "/opt/ROOT_{{timestamp}}.tgz"
-        when: artifact_stat.stat.exists
+        when: artifact_stat.stat.exists #if this file /usr/local/tomcat8/webapps/ROOT exists 
         register: archive_info
         tags:
          - deploy
 
       - name: copy ROOT dir with old_ROOT name
+      #(backup also) we will copy in the same directory , in case something happens we can quickly rollback
         shell: cp -r ROOT old_ROOT
         args:
           chdir: /usr/local/tomcat8/webapps/
@@ -57,23 +68,24 @@
         block:
          - name: Deploy vprofile artifact
            copy:
-             src: "/tmp/vproapp-{{vprofile_version}}"
+             src: "/tmp/vproapp-{{vprofile_version}}" # that one was downloaded in the first task
              dest: /usr/local/tomcat8/webapps/ROOT.war
-             remote_src: yes
+             remote_src: yes  #for copy module, remote_src=yes if the source is on a remote machine.
            register: deploy_info
            tags:
             - deploy
         rescue:
+        #if the deployment fails, instant ROLLBACK
           - shell: cp -r old_ROOT ROOT
             args:
               chdir: /usr/local/tomcat8/webapps/
-
+    ##################### if any thing goes wrong it will pass to "rescue" ##################
       rescue:
        - name: Start tomcat svc
          service:
           name: tomcat
           state: started
-
+  #if everything goes fine we will continue from here :
     - name: Start tomcat svc
       service:
         name: tomcat
@@ -83,10 +95,15 @@
        - deploy
 
     - name: Wait until ROOT.war is extracted to ROOT directory
+      #when we start the Tomcat service, the artifact takes time to get extracted sometimes, so we wait !
       wait_for:
         path: /usr/local/tomcat8/webapps/ROOT
       tags:
        - deploy
+
+
+# if i am going to deploy application properties file from the playbook by using playbook ,then we uncomment this and it will notify the handler later
+# but application properties file we are building it in the build job itself, we will have a build job to build application properties file with write backend server details
 
 #    - name: Deploy web configuration file
 #      template:
