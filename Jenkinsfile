@@ -32,6 +32,7 @@ pipeline {
                     ])
                 }
             }
+        }    
 
        
         stage('Ansible Deploy to Prod'){
