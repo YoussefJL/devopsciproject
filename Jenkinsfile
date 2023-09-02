@@ -15,22 +15,23 @@ pipeline {
     stages {
         
         //this stage is to ask user for TIME & BUILD variables values to enter , we need those in the next stage
-        stage('Setup parameters'){
-            steps{
-                script{
-                    parameters([
-                        string(
-                            defaultValue: '',
-                            name: 'BUILD',
-                        ),
-                        string(
-                            defaultValue: '',
-                            name: 'TIME',
-                        )
+        stage('Setup parameters') {
+            steps {
+                script { 
+                    properties([
+                        parameters([
+                            string(
+                                defaultValue: '', 
+                                name: 'BUILD', 
+                            ),
+							string(
+                                defaultValue: '', 
+                                name: 'TIME', 
+                            )
+                        ])
                     ])
                 }
             }
-        }
 
        
         stage('Ansible Deploy to Prod'){
